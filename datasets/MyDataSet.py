@@ -422,5 +422,3 @@ class MyDataset_org(Dataset):
         data = self.__itensity_normalize_one_volume__(data)
 
         return data
-    
-    

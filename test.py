@@ -10,7 +10,7 @@ import numpy as np
 def test(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    # 选择模型
+    # 选择模型 Select model
     if args.backbone == "resnet":
         model, _ = generate_model(model_name=args.model_name, num_seg_classes=3, phase='test')
     elif args.backbone == "swin":
@@ -18,7 +18,7 @@ def test(args):
     else:
         raise ValueError(f"Unsupported backbone: {args.backbone}")
 
-    # 加载权重
+    # 加载权重 Load weights
     if args.checkpoint is not None:
         print(f"Loading model checkpoint from {args.checkpoint}")
         state_dict = torch.load(args.checkpoint, map_location=device)
@@ -29,7 +29,7 @@ def test(args):
     model = model.to(device)
     model.eval()
 
-    # 加载测试数据
+    # 加载测试数据 Load test data
     test_dataset = datasets.MyDataSet.MyDataset_test(json_path=args.test_json, image_dir=args.test_image_dir)
     test_loader = DataLoader(test_dataset, batch_size=args.batch_size, shuffle=False)
 
@@ -60,7 +60,7 @@ def test(args):
     accuracy = total_correct / total_samples
     print(f"[Test] Loss: {avg_loss:.4f} | Accuracy: {accuracy:.4f}")
 
-    # 统计指标
+    # 统计指标 Statistical indicators
     all_logits = torch.cat(all_logits, dim=0).numpy()  # (N, C)
     all_labels = np.array(all_labels)
     all_preds = np.array(all_preds)
@@ -97,7 +97,7 @@ def test(args):
         print(f"Class {i}: Accuracy = {acc_i:.4f} | AUC = {auc_i:.4f} | "
               f"Precision = {prec_i:.4f} | Recall = {rec_i:.4f}")
 
-    # 可选保存预测
+    # 可选保存预测 Optional saving of predictions
     if args.save_preds:
         np.savez(args.save_preds, predictions=all_preds, labels=all_labels)
         print(f"Saved predictions to {args.save_preds}")
