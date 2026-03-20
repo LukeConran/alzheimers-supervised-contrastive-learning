@@ -1,6 +1,6 @@
 import torch
 from torch import nn
-from models import resnet_org, swintransformer, resnet_20_head
+from models import resnet_org
 
 
 def generate_model(model_name='resnet10', num_seg_classes=3, no_cuda=False, phase='train', pretrain_path=None, new_layer_names=['avgpool','fc', 'fc_heads','fc_disease']):
@@ -15,8 +15,6 @@ def generate_model(model_name='resnet10', num_seg_classes=3, no_cuda=False, phas
         model = resnet_org.resnet101(num_seg_classes=num_seg_classes) 
     elif model_name == 'resnet152':
         model = resnet_org.resnet152(num_seg_classes=num_seg_classes) 
-    elif model_name == 'resnet50_atrophy':
-        model = resnet_20_head.resnet50(num_seg_classes=num_seg_classes)
     if not no_cuda:
         if torch.cuda.device_count()> 1:
             model = model.cuda() 
@@ -64,30 +62,3 @@ def generate_model(model_name='resnet10', num_seg_classes=3, no_cuda=False, phas
 
     return model, model.parameters()
 
-def generate_model_swin(phase='train', pretrain_path=None, new_layer_names=['avgpool','fc']):
-    model = swintransformer.SwinClassifier(768, num_classes=3)
-    model.to("cuda")
-    net_dict = model.state_dict()
-    if phase != 'test' and pretrain_path:
-        print ('loading pretrained model {}'.format(pretrain_path))
-        ckpt = torch.load(pretrain_path)
-        state_dict = ckpt["state_dict"]
-        cleaned_state_dict = {k.replace("module.", "").replace("model.", "").replace("swinViT.", ""): v for k, v in state_dict.items()}
-        pretrain_dict = {k: v for k, v in cleaned_state_dict.items() if k in net_dict.keys()}
-        net_dict.update(pretrain_dict)
-        missing, unexpected = model.load_state_dict(net_dict, strict=False)
-        print("Missing keys:", missing)
-        print("Unexpected keys:", unexpected)
-        
-        # new_parameters = [] 
-        # for pname, p in model.named_parameters():
-        #     for layer_name in new_layer_names:
-        #         if pname.find(layer_name) >= 0:
-        #             new_parameters.append(p)
-        #             break
-        # new_parameters_id = list(map(id, new_parameters))
-        # base_parameters = list(filter(lambda p: id(p) not in new_parameters_id, model.parameters()))
-        # parameters = {'base_parameters': base_parameters, 
-        #               'new_parameters': new_parameters}
-        return model, model.parameters()
-    return model, model.parameters()

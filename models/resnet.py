@@ -110,13 +110,34 @@ class Bottleneck(nn.Module):
 
 
 class ResNet(nn.Module):
+    # ── Contrastive Learning Extension ───────────────────────────────────────
+    # Two output modes are supported via the `return_embedding` flag in forward():
+    #
+    #   return_embedding=False (default):
+    #     Standard classification path: avgpool → flatten → fc
+    #     Used for cross-entropy training and inference.
+    #
+    #   return_embedding=True:
+    #     Contrastive path: avgpool → flatten → projector → L2-normalize
+    #     The projector is a 2-layer MLP that maps the backbone feature to a
+    #     lower-dimensional space where the SupCon loss is computed.
+    #     L2 normalization ensures cosine similarity = dot product, which is
+    #     what SupConLoss expects.
+    # ─────────────────────────────────────────────────────────────────────────
 
     def __init__(self,
                  block,
                  layers,
                  num_seg_classes,
                  shortcut_type='B',
-                 no_cuda = False):
+                 no_cuda=False,
+                 proj_dim=128):
+        """
+        Args:
+            proj_dim (int): Output dimension of the contrastive projection head.
+                            128 is the standard choice from SimCLR / SupCon papers.
+                            Smaller = more compact embedding space.
+        """
         self.inplanes = 64
         self.no_cuda = no_cuda
         super(ResNet, self).__init__()
@@ -127,7 +148,7 @@ class ResNet(nn.Module):
             stride=(2, 2, 2),
             padding=(3, 3, 3),
             bias=False)
-            
+
         self.bn1 = nn.BatchNorm3d(64)
         self.relu = nn.ReLU(inplace=True)
         self.maxpool = nn.MaxPool3d(kernel_size=(3, 3, 3), stride=2, padding=1)
@@ -138,10 +159,22 @@ class ResNet(nn.Module):
             block, 256, layers[2], shortcut_type, stride=1, dilation=2)
         self.layer4 = self._make_layer(
             block, 512, layers[3], shortcut_type, stride=1, dilation=4)
-                            
+
         self.avgpool = nn.AdaptiveAvgPool3d((1, 1, 1))
 
-        self.fc = nn.Linear(512 * block.expansion,num_seg_classes)
+        feat_dim = 512 * block.expansion   # e.g. 512 for BasicBlock, 2048 for Bottleneck
+
+        # Classification head (unchanged from original)
+        self.fc = nn.Linear(feat_dim, num_seg_classes)
+
+        # Projection head for contrastive learning
+        # Architecture: Linear → ReLU → Linear (same pattern as SimCLR/SupCon)
+        # The hidden dim matches feat_dim so no information bottleneck before the ReLU.
+        self.projector = nn.Sequential(
+            nn.Linear(feat_dim, feat_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(feat_dim, proj_dim),
+        )
 
         for m in self.modules():
             if isinstance(m, nn.Conv3d):
@@ -176,7 +209,15 @@ class ResNet(nn.Module):
 
         return nn.Sequential(*layers)
 
-    def forward(self, x):
+    def forward(self, x, return_embedding=False):
+        """
+        Args:
+            x (Tensor): Input 3D MRI volume, shape (B, 1, D, H, W).
+            return_embedding (bool):
+                False → classification logits via self.fc  (cross-entropy mode)
+                True  → L2-normalized projection embedding  (contrastive mode)
+        """
+        # ── Shared backbone (3D ResNet encoder) ──────────────────────────────
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
@@ -185,12 +226,16 @@ class ResNet(nn.Module):
         x = self.layer2(x)
         x = self.layer3(x)
         x = self.layer4(x)
-        #x = self.conv_seg(x)
         x = self.avgpool(x)
-        x = x.view(x.size(0),-1)
-        x = self.fc(x)
+        feat = x.view(x.size(0), -1)   # (B, feat_dim)
 
-        return x
+        # ── Contrastive path: project and normalize ───────────────────────────
+        if return_embedding:
+            z = self.projector(feat)                   # (B, proj_dim)
+            return F.normalize(z, dim=1)               # unit vectors for cosine sim
+
+        # ── Classification path: standard linear head ─────────────────────────
+        return self.fc(feat)
 
 def resnet10(**kwargs):
     """Constructs a ResNet-18 model.

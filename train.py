@@ -5,13 +5,11 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
-from monai.networks.nets.swin_unetr import SwinTransformer as SwinViT
-from monai.utils import ensure_tuple_rep
-
 import models
 import datasets
+from losses import SupConLoss          # supervised contrastive loss
 
-from medicalnet_model import generate_model, generate_model_swin
+from medicalnet_model import generate_model
 
 def get_3d_sincos_pos_embed(D, H, W, dim, device):
     def sincos_embedding(pos, dim_half):
@@ -39,31 +37,47 @@ def get_3d_sincos_pos_embed(D, H, W, dim, device):
 
 
 def train(args):
+    # ── Output directory ──────────────────────────────────────────────────────
+    os.makedirs(args.output_dir, exist_ok=True)
+
+    # ── Device setup ──────────────────────────────────────────────────────────
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    # ── Model and optimizer setup ─────────────────────────────────────────────
     if args.backbone == "resnet":
-        classifier, parameters = generate_model(model_name=args.model_name,num_seg_classes=3, phase='train', pretrain_path=args.checkpoint_pretrain)
+        classifier, parameters = generate_model(model_name=args.model_name, num_seg_classes=3, phase='train', pretrain_path=args.checkpoint_pretrain)
         if args.checkpoint_pretrain:
             print("Use pretrained model")
             params = [{ 'params': parameters['base_parameters'], 'lr': args.lr }, { 'params': parameters['new_parameters'], 'lr': args.lr*100 }]
-            optimizer = torch.optim.Adam(params, weight_decay=1e-3)   
+            optimizer = torch.optim.Adam(params, weight_decay=1e-3)
         else:
             print("Train from scratch")
-            optimizer = torch.optim.Adam(parameters, weight_decay=1e-3, lr=args.lr)     
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-    elif args.backbone == "swin":
-        classifier, parameters = generate_model_swin(pretrain_path=args.checkpoint_pretrain)
-        if args.checkpoint_pretrain:
-            print("Use pretrained model")
-            # params = [{ 'params': parameters['base_parameters'], 'lr': args.lr }, { 'params': parameters['new_parameters'], 'lr': args.lr*100 }]
-            optimizer = torch.optim.Adam(parameters, weight_decay=1e-3, lr=args.lr) 
-        else:
             optimizer = torch.optim.Adam(parameters, weight_decay=1e-3, lr=args.lr)
         scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
+    # ── Loss functions ────────────────────────────────────────────────────────
+    # Cross-entropy is always used for classification.
+    # SupConLoss is added on top when --contrastive is enabled.
     criterion = nn.CrossEntropyLoss()
+    supcon = SupConLoss(temperature=args.temperature)
 
-    train_dataset = datasets.MyDataSet.MyDataset(json_path=args.train_json, image_dir=args.train_image_dir)
-    valid_dataset = datasets.MyDataSet.MyDataset(json_path=args.valid_json, image_dir=args.valid_image_dir)
+    # ── Dataset and dataloader setup ─────────────────────────────────────────
+    # When contrastive mode is on, use ContrastiveDataset which returns
+    # (view1, view2, label) instead of (image, label).
+    # The validation set always uses the standard dataset (no augmentation needed).
+    if args.contrastive:
+        print(f"Contrastive mode ON  (lambda={args.lambda_con}, temperature={args.temperature})")
+        train_dataset = datasets.MyDataSet.ContrastiveDataset(
+            json_path=args.train_json, image_dir=args.train_image_dir
+        )
+    else:
+        print("Contrastive mode OFF — standard cross-entropy training")
+        train_dataset = datasets.MyDataSet.MyDataset(
+            json_path=args.train_json, image_dir=args.train_image_dir
+        )
+
+    valid_dataset = datasets.MyDataSet.MyDataset(
+        json_path=args.valid_json, image_dir=args.valid_image_dir
+    )
 
     print(f"Length of training dataset: {len(train_dataset)}")
     print(f"Length of validation dataset: {len(valid_dataset)}")
@@ -71,19 +85,54 @@ def train(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
 
+    # ── Training loop ─────────────────────────────────────────────────────────
     best_val_acc = 0.0
     for epoch in range(args.epochs):
         classifier.train()
         total_loss = 0
         correct = 0
         total = 0
+
         for i, group in enumerate(optimizer.param_groups):
             print(f"Epoch {epoch + 1} - Learning Rate Group {i}: {group['lr']:.6f}")
-        for images, labels in train_loader:
-            images, labels = images.to(device), labels.to(device)
 
-            logits = classifier(images)
-            loss = criterion(logits, labels)
+        # ── Per-batch training step ───────────────────────────────────────────
+        for batch in train_loader:
+
+            if args.contrastive:
+                # ── Contrastive + classification joint loss ───────────────────
+                # Batch contains two independently-augmented views of each scan.
+                # view1/view2 shape: (B, D, H, W) — channel dim added below.
+                view1, view2, labels = batch
+                view1   = view1.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                view2   = view2.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                labels  = labels.to(device)
+
+                # Classification loss: use view1 through the standard fc head
+                logits = classifier(view1)
+                ce_loss = criterion(logits, labels)
+
+                # Contrastive loss:
+                #   1. Get L2-normalized projections for both views
+                #   2. Concatenate to shape (2*B, proj_dim)
+                #   3. SupConLoss uses labels to identify which pairs are positive
+                emb1 = classifier(view1, return_embedding=True)   # (B, proj_dim)
+                emb2 = classifier(view2, return_embedding=True)   # (B, proj_dim)
+                features = torch.cat([emb1, emb2], dim=0)         # (2*B, proj_dim)
+                con_loss = supcon(features, labels)
+
+                # Combined loss: cross-entropy + lambda * contrastive
+                # lambda_con controls the trade-off.
+                # Start with lambda=0.5 and tune; if val_acc drops, reduce it.
+                loss = ce_loss + args.lambda_con * con_loss
+
+            else:
+                # ── Standard cross-entropy only ───────────────────────────────
+                images, labels = batch
+                images = images.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                labels = labels.to(device)
+                logits = classifier(images)
+                loss = criterion(logits, labels)
 
             optimizer.zero_grad()
             loss.backward()
@@ -96,14 +145,16 @@ def train(args):
         train_loss = total_loss / total
         train_acc = correct / total
         scheduler.step()
-        # Validation
+
+        # ── Validation (always standard, no augmentation) ─────────────────────
         classifier.eval()
         val_loss = 0
         val_correct = 0
         val_total = 0
         with torch.no_grad():
             for images, labels in valid_loader:
-                images, labels = images.to(device), labels.to(device)
+                images = images.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                labels = labels.to(device)
                 logits = classifier(images)
                 loss = criterion(logits, labels)
                 val_loss += loss.item() * labels.size(0)
@@ -112,19 +163,16 @@ def train(args):
 
         val_avg_loss = val_loss / val_total
         val_acc = val_correct / val_total
+
+        # ── Checkpointing ─────────────────────────────────────────────────────
         if (epoch + 1) % 10 == 0:
-            if args.checkpoint_pretrain:
-                torch.save(classifier.state_dict(), f"/scratch/user/baileyyeah/Alzheimer_my/results/{args.backbone}/model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth")
-            else:
-                torch.save(classifier.state_dict(), f"/scratch/user/baileyyeah/Alzheimer_my/results/{args.backbone}/scratch/model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth")
+            torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth"))
             print(f"Saved model at epoch {epoch+1}.")
         if val_acc > best_val_acc:
             best_val_acc = val_acc
-            if args.checkpoint_pretrain:
-                torch.save(classifier.state_dict(), f"/scratch/user/baileyyeah/Alzheimer_my/results/{args.backbone}/best_model_{args.model_name}_bs{args.batch_size}.pth")
-            else:
-                torch.save(classifier.state_dict(), f"/scratch/user/baileyyeah/Alzheimer_my/results/{args.backbone}/scratch/best_model_{args.model_name}_bs{args.batch_size}.pth")
+            torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"best_model_{args.model_name}_bs{args.batch_size}.pth"))
             print(f"New best model saved at epoch {epoch+1} with val_acc: {val_acc:.4f}")
+
         print(f"[Epoch {epoch}] Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f} | "
               f"Val Loss: {val_avg_loss:.4f}  Val Acc: {val_acc:.4f}")
 
@@ -141,7 +189,21 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--backbone", type=str, default='resnet')
     parser.add_argument("--checkpoint_pretrain", type=str, default=None)
+    parser.add_argument("--output_dir", type=str, default="/scratch/user/lukeconran/alzheimers/results",
+                        help="Directory to save model checkpoints")
     parser.add_argument("--model_name", type=str, default='resnet10')
+
+    # ── Contrastive learning arguments ────────────────────────────────────────
+    parser.add_argument("--contrastive", action="store_true",
+                        help="Enable supervised contrastive loss alongside cross-entropy.")
+    parser.add_argument("--lambda_con", type=float, default=0.5,
+                        help="Weight on the contrastive loss term. "
+                             "Combined loss = CE + lambda_con * SupCon. "
+                             "Tune between 0.1 and 1.0; reduce if val_acc drops.")
+    parser.add_argument("--temperature", type=float, default=0.1,
+                        help="SupCon temperature. Lower = sharper similarity distribution. "
+                             "0.1 is a good starting point for medical imaging.")
+
     args = parser.parse_args()
     print(args)
     train(args)
