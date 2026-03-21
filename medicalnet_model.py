@@ -1,20 +1,20 @@
 import torch
 from torch import nn
-from models import resnet_org
+from models import resnet
 
 
 def generate_model(model_name='resnet10', num_seg_classes=3, no_cuda=False, phase='train', pretrain_path=None, new_layer_names=['avgpool','fc', 'fc_heads','fc_disease']):
 
     if model_name == 'resnet10':
-        model = resnet_org.resnet10(num_seg_classes=num_seg_classes)
+        model = resnet.resnet10(num_seg_classes=num_seg_classes)
     elif model_name == 'resnet50':
-        model = resnet_org.resnet50(num_seg_classes=num_seg_classes)
+        model = resnet.resnet50(num_seg_classes=num_seg_classes)
     elif model_name == 'resnet18':
-        model = resnet_org.resnet18(num_seg_classes=num_seg_classes) 
+        model = resnet.resnet18(num_seg_classes=num_seg_classes) 
     elif model_name == 'resnet101':
-        model = resnet_org.resnet101(num_seg_classes=num_seg_classes) 
+        model = resnet.resnet101(num_seg_classes=num_seg_classes) 
     elif model_name == 'resnet152':
-        model = resnet_org.resnet152(num_seg_classes=num_seg_classes) 
+        model = resnet.resnet152(num_seg_classes=num_seg_classes) 
     if not no_cuda:
         if torch.cuda.device_count()> 1:
             model = model.cuda() 

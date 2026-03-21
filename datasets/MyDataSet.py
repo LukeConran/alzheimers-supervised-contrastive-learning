@@ -5,7 +5,7 @@ import json
 import os
 from scipy import ndimage
 LABEL_MAP = {
-    "Alzheimer's Disease": 0,
+    "Dementia": 0,
     "Mild Cognitive Impairment": 1,
     "Normal Cognition": 2,
 }
@@ -31,7 +31,7 @@ KEY_MAPPING_atrophy = {
     "parahippocampal": "parahippocampal"
 }
 LABEL_MAP_test = {
-    "Alzheimer's Disease": 0,
+    "Dementia": 0,
     "Mild Cognitive Impairment": 1,
     "Normal Cognition": 2,
 }

@@ -104,8 +104,8 @@ def train(args):
                 # Batch contains two independently-augmented views of each scan.
                 # view1/view2 shape: (B, D, H, W) — channel dim added below.
                 view1, view2, labels = batch
-                view1   = view1.unsqueeze(1).to(device)   # (B, 1, D, H, W)
-                view2   = view2.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                view1   = view1.to(device)   # (B, 1, D, H, W)
+                view2   = view2.to(device)   # (B, 1, D, H, W)
                 labels  = labels.to(device)
 
                 # Classification loss: use view1 through the standard fc head
@@ -129,7 +129,7 @@ def train(args):
             else:
                 # ── Standard cross-entropy only ───────────────────────────────
                 images, labels = batch
-                images = images.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                images = images.to(device)   # (B, 1, D, H, W)
                 labels = labels.to(device)
                 logits = classifier(images)
                 loss = criterion(logits, labels)
@@ -153,7 +153,7 @@ def train(args):
         val_total = 0
         with torch.no_grad():
             for images, labels in valid_loader:
-                images = images.unsqueeze(1).to(device)   # (B, 1, D, H, W)
+                images = images.to(device)   # (B, 1, D, H, W)
                 labels = labels.to(device)
                 logits = classifier(images)
                 loss = criterion(logits, labels)
