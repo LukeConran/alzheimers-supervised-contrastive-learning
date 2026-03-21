@@ -189,7 +189,7 @@ if __name__ == "__main__":
     parser.add_argument("--epochs", type=int, default=10, help="Number of training epochs")
     parser.add_argument("--backbone", type=str, default='resnet')
     parser.add_argument("--checkpoint_pretrain", type=str, default=None)
-    parser.add_argument("--output_dir", type=str, default="/scratch/user/lukeconran/alzheimers/results",
+    parser.add_argument("--output_dir", type=str, default="/home/lukeconran/alzheimers/results",
                         help="Directory to save model checkpoints")
     parser.add_argument("--model_name", type=str, default='resnet10')
 

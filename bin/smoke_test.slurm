@@ -28,4 +28,4 @@ python train.py \
     --contrastive \
     --lambda_con 0.5 \
     --temperature 0.1 \
-    --output_dir /scratch/user/lukeconran/alzheimers/results
+    --output_dir /home/lukeconran/alzheimers/results
