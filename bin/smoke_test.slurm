@@ -3,12 +3,12 @@
 ##NECESSARY JOB SPECIFICATIONS
 #SBATCH --export=NONE
 #SBATCH --job-name=alz_smoke_test
-#SBATCH --time=00:15:00
+#SBATCH --time=00:30:00
 #SBATCH --mem=16G
 #SBATCH --output=./output/smoke_test.%j
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4=8
+#SBATCH --cpus-per-task=8
 
 #SBATCH --gpus-per-task=1
 #SBATCH --partition=gpu
