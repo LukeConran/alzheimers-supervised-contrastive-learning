@@ -1,6 +1,7 @@
 import os
 import json
 import argparse
+import time
 import numpy as np
 import torch
 import torch.nn as nn
@@ -87,17 +88,19 @@ def train(args):
 
     # ── Training loop ─────────────────────────────────────────────────────────
     best_val_acc = 0.0
+    n_train_batches = len(train_loader)
     for epoch in range(args.epochs):
         classifier.train()
         total_loss = 0
         correct = 0
         total = 0
+        epoch_start = time.time()
 
         for i, group in enumerate(optimizer.param_groups):
-            print(f"Epoch {epoch + 1} - Learning Rate Group {i}: {group['lr']:.6f}")
+            print(f"Epoch {epoch + 1} - Learning Rate Group {i}: {group['lr']:.6f}", flush=True)
 
         # ── Per-batch training step ───────────────────────────────────────────
-        for batch in train_loader:
+        for batch_idx, batch in enumerate(train_loader):
 
             if args.contrastive:
                 # ── Contrastive + classification joint loss ───────────────────
@@ -142,6 +145,12 @@ def train(args):
             correct += (logits.argmax(dim=1) == labels).sum().item()
             total += labels.size(0)
 
+            if (batch_idx + 1) % 10 == 0 or (batch_idx + 1) == n_train_batches:
+                running_loss = total_loss / total
+                running_acc = correct / total
+                print(f"  [Epoch {epoch+1}/{args.epochs}] Batch {batch_idx+1}/{n_train_batches} — "
+                      f"loss: {running_loss:.4f}  acc: {running_acc:.4f}", flush=True)
+
         train_loss = total_loss / total
         train_acc = correct / total
         scheduler.step()
@@ -167,14 +176,16 @@ def train(args):
         # ── Checkpointing ─────────────────────────────────────────────────────
         if (epoch + 1) % 10 == 0:
             torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth"))
-            print(f"Saved model at epoch {epoch+1}.")
+            print(f"Saved model at epoch {epoch+1}.", flush=True)
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"best_model_{args.model_name}_bs{args.batch_size}.pth"))
-            print(f"New best model saved at epoch {epoch+1} with val_acc: {val_acc:.4f}")
+            print(f"New best model saved at epoch {epoch+1} with val_acc: {val_acc:.4f}", flush=True)
 
-        print(f"[Epoch {epoch}] Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f} | "
-              f"Val Loss: {val_avg_loss:.4f}  Val Acc: {val_acc:.4f}")
+        epoch_time = time.time() - epoch_start
+        print(f"[Epoch {epoch+1}/{args.epochs}] Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f} | "
+              f"Val Loss: {val_avg_loss:.4f}  Val Acc: {val_acc:.4f} | "
+              f"Time: {epoch_time:.1f}s", flush=True)
 
 
 if __name__ == "__main__":

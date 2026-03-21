@@ -4,11 +4,11 @@
 #SBATCH --export=NONE
 #SBATCH --job-name=alz_smoke_test
 #SBATCH --time=00:15:00
-#SBATCH --mem=8G
+#SBATCH --mem=16G
 #SBATCH --output=./output/smoke_test.%j
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=4=8
 
 #SBATCH --gpus-per-task=1
 #SBATCH --partition=gpu
@@ -21,8 +21,8 @@ python train.py \
     --valid_json /scratch/group/optmai/chenlang/ADNI/text_data/validation/data.json \
     --valid_image_dir /scratch/group/optmai/chenlang/ADNI/image_data/validation/ \
     --lr 1e-4 \
-    --batch_size 2 \
-    --epochs 2 \
+    --batch_size 8 \
+    --epochs 1 \
     --backbone resnet \
     --model_name resnet10 \
     --contrastive \
