@@ -1,12 +1,15 @@
 #!/bin/bash
+
+##NECESSARY JOB SPECIFICATIONS
 #SBATCH --export=NONE
-#SBATCH --job-name=alz_contrastive
-#SBATCH --time=24:00:00
+#SBATCH --job-name=alz_smoke_test_contrastive
+#SBATCH --time=00:45:00
 #SBATCH --mem=16G
-#SBATCH --output=./output/contrastive.%j
+#SBATCH --output=./output/smoke_test_contrastive.%j
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
+
 #SBATCH --gpus-per-task=1
 #SBATCH --partition=gpu
 
@@ -19,11 +22,11 @@ python train.py \
     --valid_image_dir /scratch/group/optmai/chenlang/ADNI/image_data/validation/ \
     --lr 1e-4 \
     --batch_size 8 \
-    --epochs 30 \
+    --epochs 1 \
     --backbone resnet \
     --model_name resnet10 \
     --checkpoint_pretrain /home/lukeconran/alzheimers/pretrain/resnet_10.pth \
     --contrastive \
     --lambda_con 0.5 \
     --temperature 0.1 \
-    --output_dir /home/lukeconran/alzheimers/results/contrastive
+    --output_dir /home/lukeconran/alzheimers/results/constrastive

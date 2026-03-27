@@ -22,4 +22,5 @@ python train.py \
     --epochs 30 \
     --backbone resnet \
     --model_name resnet10 \
+    --checkpoint_pretrain /home/lukeconran/alzheimers/pretrain/resnet_10.pth \
     --output_dir /home/lukeconran/alzheimers/results/ce

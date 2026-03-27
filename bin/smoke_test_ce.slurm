@@ -2,10 +2,10 @@
 
 ##NECESSARY JOB SPECIFICATIONS
 #SBATCH --export=NONE
-#SBATCH --job-name=alz_smoke_test
+#SBATCH --job-name=alz_smoke_test_ce
 #SBATCH --time=00:45:00
 #SBATCH --mem=16G
-#SBATCH --output=./output/smoke_test.%j
+#SBATCH --output=./output/smoke_test_ce.%j
 #SBATCH --ntasks=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=8
@@ -25,7 +25,5 @@ python train.py \
     --epochs 1 \
     --backbone resnet \
     --model_name resnet10 \
-    --contrastive \
-    --lambda_con 0.5 \
-    --temperature 0.1 \
-    --output_dir /home/lukeconran/alzheimers/results
+    --checkpoint_pretrain /home/lukeconran/alzheimers/pretrain/resnet_10.pth \
+    --output_dir /home/lukeconran/alzheimers/results/ce

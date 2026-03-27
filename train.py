@@ -86,10 +86,21 @@ def train(args):
     train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
     valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
 
-    # ── Training loop ─────────────────────────────────────────────────────────
+    # ── Resume from checkpoint ────────────────────────────────────────────────
+    start_epoch = 0
     best_val_acc = 0.0
+    if args.resume:
+        checkpoint = torch.load(args.resume, map_location=device)
+        classifier.load_state_dict(checkpoint['model'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
+        start_epoch = checkpoint['epoch']
+        best_val_acc = checkpoint.get('best_val_acc', 0.0)
+        print(f"Resumed from checkpoint '{args.resume}' at epoch {start_epoch}", flush=True)
+
+    # ── Training loop ─────────────────────────────────────────────────────────
     n_train_batches = len(train_loader)
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
         classifier.train()
         total_loss = 0
         correct = 0
@@ -175,8 +186,15 @@ def train(args):
 
         # ── Checkpointing ─────────────────────────────────────────────────────
         if (epoch + 1) % 10 == 0:
-            torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth"))
-            print(f"Saved model at epoch {epoch+1}.", flush=True)
+            ckpt_path = os.path.join(args.output_dir, f"model_{args.model_name}_bs{args.batch_size}_epoch_{epoch+1}.pth")
+            torch.save({
+                'epoch': epoch + 1,
+                'model': classifier.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'scheduler': scheduler.state_dict(),
+                'best_val_acc': best_val_acc,
+            }, ckpt_path)
+            print(f"Saved checkpoint at epoch {epoch+1}.", flush=True)
         if val_acc > best_val_acc:
             best_val_acc = val_acc
             torch.save(classifier.state_dict(), os.path.join(args.output_dir, f"best_model_{args.model_name}_bs{args.batch_size}.pth"))
@@ -203,6 +221,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", type=str, default="/home/lukeconran/alzheimers/results",
                         help="Directory to save model checkpoints")
     parser.add_argument("--model_name", type=str, default='resnet10')
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to a checkpoint (.pth) to resume training from.")
 
     # ── Contrastive learning arguments ────────────────────────────────────────
     parser.add_argument("--contrastive", action="store_true",

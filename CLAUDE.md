@@ -23,6 +23,8 @@ Labels come from a JSON manifest:
 
 Label mapping: `"Alzheimer's Disease"→0`, `"Mild Cognitive Impairment"→1`, `"Normal Cognition"→2`
 
+**Note:** The raw JSON uses `"Dementia"` instead of `"Alzheimer's Disease"` — the dataset class was already fixed to handle this. Do not change it back.
+
 ## Training Modes
 
 **Standard classification:**
@@ -37,7 +39,23 @@ python train.py --backbone resnet --model_name resnet10 --lr 1e-4 --batch_size 8
 python train.py --contrastive --lambda_con 0.5 --temperature 0.1 ...
 ```
 
-When `--contrastive` is enabled, `ContrastiveDataset` returns two augmented views per scan and `SupConLoss` is added alongside cross-entropy.
+When `--contrastive` is enabled, `ContrastiveDataset` returns two augmented views per scan and `SupConLoss` is added alongside cross-entropy. Note: contrastive mode runs 3 forward passes per batch vs 1 for CE — roughly 3x the compute cost per epoch.
+
+**With MedicalNet pretrained weights (recommended):**
+
+```bash
+python train.py --checkpoint_pretrain /home/lukeconran/alzheimers/MedicalNet_pytorch_files2/pretrain/resnet_10.pth ...
+```
+
+Pretrained weights are at `/home/lukeconran/alzheimers/MedicalNet_pytorch_files2/pretrain/` on the cluster. When used, the backbone trains at `lr` and the classification head trains at `lr*100`.
+
+**Resuming a timed-out job:**
+
+```bash
+python train.py --resume /home/lukeconran/alzheimers/results/ce/model_resnet10_bs8_epoch_20.pth --epochs 30 ...
+```
+
+Periodic checkpoints (every 10 epochs) save a full dict: `model`, `optimizer`, `scheduler`, `epoch`, `best_val_acc`. The best model checkpoint saves only `state_dict` for use with `test.py`.
 
 ## Model Architecture
 
@@ -54,7 +72,12 @@ Applied only during contrastive training in `ContrastiveDataset._augment()`:
 - Additive Gaussian noise (σ=0.05)
 - Intensity scaling (0.9–1.1×)
 
+## Research Notes
+
+The core experiment is **CE vs SupCon**: does supervised contrastive learning improve classification performance given the same labeled dataset? Run `bin/train_ce.slurm` and `bin/train_contrastive.slurm` in parallel and compare per-class accuracy, AUC, precision, and recall from `test.py`.
+
+**SimCLR is not viable with ADNI alone.** The original motivation (reducing clinician labeling burden) is not addressed by SupCon since it requires labels. SimCLR would fix this but needs a large unlabeled MRI pool — ADNI is fully labeled, so there is nothing to pretrain on without a separate dataset (e.g. UK Biobank).
+
 ## Known Issues
 
-- Output paths in `train.py` are hardcoded to `/scratch/user/baileyyeah/...` — update before running
 - `medicalnet_model.py` line 3 imports `swintransformer` and `resnet_20_head` which have no corresponding files in `models/` — this causes an `ImportError` on import even if those code paths aren't used. Files were likely on the original developer's cluster but never committed. Avoid using `generate_model_swin()` or `model_name='resnet50_atrophy'` until resolved.
