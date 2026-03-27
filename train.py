@@ -83,8 +83,22 @@ def train(args):
     print(f"Length of training dataset: {len(train_dataset)}")
     print(f"Length of validation dataset: {len(valid_dataset)}")
 
-    train_loader = DataLoader(train_dataset, batch_size=args.batch_size, shuffle=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=args.batch_size, shuffle=False)
+    train_loader = DataLoader(
+        train_dataset,
+        batch_size=args.batch_size,
+        shuffle=True,
+        num_workers=8,        # parallel CPU workers for loading
+        pin_memory=True,      # faster CPU→GPU transfer
+        persistent_workers=True,  # don't respawn workers each epoch
+    )
+    valid_loader = DataLoader(
+        valid_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=8,
+        pin_memory=True,
+        persistent_workers=True,
+    )
 
     # ── Resume from checkpoint ────────────────────────────────────────────────
     start_epoch = 0
