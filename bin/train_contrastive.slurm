@@ -18,8 +18,8 @@ python train.py \
     --valid_json /scratch/group/optmai/chenlang/ADNI/text_data/validation/data.json \
     --valid_image_dir /scratch/group/optmai/chenlang/ADNI/image_data/validation/ \
     --lr 1e-4 \
-    --batch_size 32 \
-    --epochs 30 \
+    --batch_size 16 \
+    --epochs 50 \
     --backbone resnet \
     --model_name resnet10 \
     --checkpoint_pretrain /home/lukeconran/alzheimers/pretrain/resnet_10.pth \
