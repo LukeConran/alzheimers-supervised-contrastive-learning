@@ -4,8 +4,8 @@
 #SBATCH --time=01:00:00
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=8
-#SBATCH --mem=32G
+#SBATCH --cpus-per-task=24
+#SBATCH --mem=180G
 #SBATCH --gres=gpu:rtx:1
 #SBATCH --partition=gpu
 #SBATCH --output=./output/test_ce.%j

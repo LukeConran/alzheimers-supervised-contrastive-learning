@@ -112,6 +112,14 @@ def train(args):
         best_val_acc = checkpoint.get('best_val_acc', 0.0)
         print(f"Resumed from checkpoint '{args.resume}' at epoch {start_epoch}", flush=True)
 
+    # ── Metrics log (loaded from file if resuming) ────────────────────────────
+    metrics_path = os.path.join(args.output_dir, "metrics.json")
+    if args.resume and os.path.exists(metrics_path):
+        with open(metrics_path) as f:
+            epoch_metrics = json.load(f)
+    else:
+        epoch_metrics = []
+
     # ── Training loop ─────────────────────────────────────────────────────────
     n_train_batches = len(train_loader)
     for epoch in range(start_epoch, args.epochs):
@@ -218,6 +226,17 @@ def train(args):
         print(f"[Epoch {epoch+1}/{args.epochs}] Train Loss: {train_loss:.4f}  Train Acc: {train_acc:.4f} | "
               f"Val Loss: {val_avg_loss:.4f}  Val Acc: {val_acc:.4f} | "
               f"Time: {epoch_time:.1f}s", flush=True)
+
+        # ── Save epoch metrics ────────────────────────────────────────────────
+        epoch_metrics.append({
+            'epoch': epoch + 1,
+            'train_loss': train_loss,
+            'train_acc': train_acc,
+            'val_loss': val_avg_loss,
+            'val_acc': val_acc,
+        })
+        with open(metrics_path, 'w') as f:
+            json.dump(epoch_metrics, f, indent=2)
 
 
 if __name__ == "__main__":

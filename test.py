@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import datasets
-from medicalnet_model import generate_model, generate_model_swin
+from medicalnet_model import generate_model
 from sklearn.metrics import roc_auc_score, precision_score, recall_score
 import numpy as np
 
@@ -13,8 +13,6 @@ def test(args):
     # 选择模型 Select model
     if args.backbone == "resnet":
         model, _ = generate_model(model_name=args.model_name, num_seg_classes=3, phase='test')
-    elif args.backbone == "swin":
-        model, _ = generate_model_swin(phase='test')
     else:
         raise ValueError(f"Unsupported backbone: {args.backbone}")
 
@@ -99,7 +97,7 @@ def test(args):
 
     # 可选保存预测 Optional saving of predictions
     if args.save_preds:
-        np.savez(args.save_preds, predictions=all_preds, labels=all_labels)
+        np.savez(args.save_preds, predictions=all_preds, labels=all_labels, logits=all_logits)
         print(f"Saved predictions to {args.save_preds}")
 
 if __name__ == "__main__":
