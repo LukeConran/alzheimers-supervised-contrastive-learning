@@ -58,7 +58,7 @@ def train(args):
     # ── Loss functions ────────────────────────────────────────────────────────
     # Cross-entropy is always used for classification.
     # SupConLoss is added on top when --contrastive is enabled.
-    criterion = nn.CrossEntropyLoss()
+    criterion = nn.CrossEntropyLoss(label_smoothing=args.label_smoothing)
     supcon = SupConLoss(temperature=args.temperature)
 
     # ── Dataset and dataloader setup ─────────────────────────────────────────
@@ -267,6 +267,9 @@ if __name__ == "__main__":
     parser.add_argument("--temperature", type=float, default=0.1,
                         help="SupCon temperature. Lower = sharper similarity distribution. "
                              "0.1 is a good starting point for medical imaging.")
+    parser.add_argument("--label_smoothing", type=float, default=0.0,
+                        help="Label smoothing for CrossEntropyLoss (0.0 = off). "
+                             "0.1 is recommended for CE runs to prevent overconfident predictions.")
 
     args = parser.parse_args()
     print(args)

@@ -190,28 +190,37 @@ def plot_comparison_bar(ce_preds, ce_labels, ce_logits,
 
 def main():
     parser = argparse.ArgumentParser(description="Plot training curves and evaluation results")
+    parser.add_argument('--model', type=str, default='resnet10', choices=['resnet10', 'resnet18'],
+                        help='Which model to plot results for. Determines default result and figure paths.')
     parser.add_argument('--ce_metrics',  type=str, default=None,
-                        help='Path to CE metrics.json saved by train.py')
+                        help='Override path to CE metrics.json (default: results/ce[_resnet18]/metrics.json)')
     parser.add_argument('--con_metrics', type=str, default=None,
-                        help='Path to SupCon metrics.json saved by train.py')
+                        help='Override path to SupCon metrics.json')
     parser.add_argument('--ce_preds',   type=str, default=None,
-                        help='Path to CE predictions .npz saved by test.py --save_preds')
+                        help='Override path to CE predictions .npz')
     parser.add_argument('--con_preds',  type=str, default=None,
-                        help='Path to SupCon predictions .npz saved by test.py --save_preds')
-    parser.add_argument('--out_dir',    type=str, default='figures',
-                        help='Directory to write plots into (created if absent)')
+                        help='Override path to SupCon predictions .npz')
+    parser.add_argument('--out_dir',    type=str, default=None,
+                        help='Override output directory (default: figures/resnet10 or figures/resnet18)')
     args = parser.parse_args()
+
+    suffix = '' if args.model == 'resnet10' else '_resnet18'
+    if args.ce_metrics  is None: args.ce_metrics  = f'results/ce{suffix}/metrics.json'
+    if args.con_metrics is None: args.con_metrics = f'results/contrastive{suffix}/metrics.json'
+    if args.ce_preds    is None: args.ce_preds    = f'results/ce{suffix}/preds.npz'
+    if args.con_preds   is None: args.con_preds   = f'results/contrastive{suffix}/preds.npz'
+    if args.out_dir     is None: args.out_dir     = f'figures/{args.model}'
 
     os.makedirs(args.out_dir, exist_ok=True)
 
-    ce_metrics  = load_metrics(args.ce_metrics)  if args.ce_metrics  else None
-    con_metrics = load_metrics(args.con_metrics) if args.con_metrics else None
+    ce_metrics  = load_metrics(args.ce_metrics)  if os.path.exists(args.ce_metrics)  else None
+    con_metrics = load_metrics(args.con_metrics) if os.path.exists(args.con_metrics) else None
 
     ce_preds = ce_labels = ce_logits = None
     con_preds = con_labels = con_logits = None
-    if args.ce_preds:
+    if os.path.exists(args.ce_preds):
         ce_preds, ce_labels, ce_logits = load_preds(args.ce_preds)
-    if args.con_preds:
+    if os.path.exists(args.con_preds):
         con_preds, con_labels, con_logits = load_preds(args.con_preds)
 
     # Training curves (either or both runs)
