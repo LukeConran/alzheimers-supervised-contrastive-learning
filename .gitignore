@@ -4,3 +4,5 @@ __pycache__
 .venv
 MedicalNet_pytorch_files2/
 pretrain/
+data/*.npz
+literature/

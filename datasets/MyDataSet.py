@@ -59,7 +59,7 @@ class MyDataset(Dataset):
             if os.path.exists(image_path):
                 self.data.append(item)
             else:
-                print(f"⚠️ Skipping missing image: {item['id']}.npz")
+                print(f"Skipping missing image: {item['id']}.npz")
 
         # 按 id 排序（可选）
         self.data = sorted(self.data, key=lambda x: x["id"])
